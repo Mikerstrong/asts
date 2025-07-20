@@ -22,7 +22,7 @@ def deduplicate_columns(cols):
             seen[col] += 1
             new_cols.append(f"{col}.{seen[col]}")
     return new_cols
-
+#git push -u origin mastergit push -u origin master
 def fetch_data(start=None, end=None):
     if end is None:
         end = datetime.today().strftime("%Y-%m-%d")
@@ -178,12 +178,18 @@ def save_html(chart_html, weekly_chart_html, table_html, output_path):
 def main():
     df = fetch_data()
     chart_html = generate_plotly_chart(df)
-    # --- Add weekly chart ---
     df_weekly = resample_weekly(df)
     weekly_chart_html = generate_plotly_chart(df_weekly)
     table_html = build_html_table(df)
     output_path = "asts.html"
-    save_html(chart_html, weekly_chart_html, table_html, output_path)
+
+    # Calculate percent change over period
+    first_close = df["Close"].iloc[0]
+    last_close = df["Close"].iloc[-1]
+    pct_change = ((last_close - first_close) / first_close) * 100
+    pct_change_html = f"<h3 style='text-align:center;'>% Change Over Period: {pct_change:.2f}%</h3>"
+
+    save_html(chart_html, weekly_chart_html, pct_change_html + table_html, output_path)
 
 if __name__ == "__main__":
     main()
