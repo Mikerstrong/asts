@@ -28,11 +28,16 @@ def make_scenario(trend=0, volatility=1, n=100, start=100):
     return prices, volumes
 
 # Scenarios: uptrend, downtrend, sideways, volatile
+# Add more diverse scenarios for deeper understanding
 scenarios = [
     ("Uptrend", *make_scenario(trend=0.3, volatility=1.2)),
     ("Downtrend", *make_scenario(trend=-0.3, volatility=1.2)),
     ("Sideways", *make_scenario(trend=0, volatility=1.2)),
     ("Volatile", *make_scenario(trend=0, volatility=3)),
+    ("Sharp Rally", *make_scenario(trend=1.0, volatility=2)),
+    ("Sharp Drop", *make_scenario(trend=-1.0, volatility=2)),
+    ("Calm Market", *make_scenario(trend=0, volatility=0.5)),
+    ("Choppy Market", *make_scenario(trend=0, volatility=4)),
 ]
 
 dates = pd.date_range(end=pd.Timestamp.today(), periods=100)
@@ -50,6 +55,13 @@ def plot_and_save(fig, name):
 
 # --- SMA & EMA ---
 sma_ema_html = "<h2>SMA & EMA: Smoothing Price Data</h2>"
+sma_ema_html += """
+<p>
+<b>SMA</b> (Simple Moving Average) and <b>EMA</b> (Exponential Moving Average) help you see the trend by smoothing out price noise.<br>
+<b>EMA</b> reacts faster to price changes, which can help you spot reversals sooner, but may also give more false signals in choppy markets.<br>
+<b>Tip:</b> In a strong trend, both SMA and EMA will slope in the trend direction. In sideways or choppy markets, they may cross the price often.
+</p>
+"""
 for label, prices, volumes in scenarios:
     df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
     df["SMA10"] = df["Close"].rolling(window=10).mean()
@@ -65,14 +77,19 @@ for label, prices, volumes in scenarios:
     <h3>{label} Market</h3>
     <img src="{fname}" alt="{label} SMA/EMA">
     <p>
-    <b>SMA</b> (Simple Moving Average) smooths price by averaging the last N closes.<br>
-    <b>EMA</b> (Exponential Moving Average) reacts faster to recent price changes.<br>
-    <i>Notice how EMA hugs the price more closely than SMA, especially in volatile or trending markets.</i>
+    <b>What to notice:</b> In a {label.lower()}, see how the moving averages behave. 
+    Do they follow the price closely or lag behind? Are there whipsaws (false signals)?
     </p>
     """
 
 # --- Bollinger Bands ---
 bb_html = "<h2>Bollinger Bands: Volatility Envelopes</h2>"
+bb_html += """
+<p>
+Bollinger Bands help you visualize volatility. When the bands are wide, the market is volatile; when narrow, it's calm.<br>
+<b>Tip:</b> Price touching or crossing the bands can signal overbought/oversold, but in strong trends, price can 'ride' the band.
+</p>
+"""
 for label, prices, volumes in scenarios:
     df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
     df["SMA20"] = df["Close"].rolling(window=20).mean()
@@ -89,37 +106,48 @@ for label, prices, volumes in scenarios:
     <h3>{label} Market</h3>
     <img src="{fname}" alt="{label} Bollinger Bands">
     <p>
-    <b>Bollinger Bands</b> expand and contract with volatility.<br>
-    <i>Notice how the bands widen during volatile periods and contract during calm periods.</i>
+    <b>What to notice:</b> In a {label.lower()}, do the bands expand or contract? Does price bounce off the bands or break through?
     </p>
     """
 
 # --- VWAP ---
 vwap_html = "<h2>VWAP: Volume Weighted Average Price</h2>"
-prices, volumes = make_scenario(trend=0.1, volatility=2)
-df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
-df["Open"] = df["Close"] + np.random.randn(100)
-df["High"] = df[["Open", "Close"]].max(axis=1) + np.abs(np.random.randn(100))
-df["Low"] = df[["Open", "Close"]].min(axis=1) - np.abs(np.random.randn(100))
-df["VWAP"] = VolumeWeightedAveragePrice(
-    high=df["High"], low=df["Low"], close=df["Close"], volume=df["Volume"]
-).volume_weighted_average_price()
-fig, ax = plt.subplots(figsize=(8, 3))
-ax.plot(df["Date"], df["Close"], label="Close", color="black")
-ax.plot(df["Date"], df["VWAP"], label="VWAP", color="purple")
-ax.set_title("VWAP Example")
-ax.legend()
-fname = plot_and_save(fig, "vwap")
-vwap_html += f"""
-<img src="{fname}" alt="VWAP Example">
+vwap_html += """
 <p>
-<b>VWAP</b> gives the average price weighted by volume.<br>
-<i>Traders use VWAP to judge whether they bought/sold at a good price relative to the day's trading.</i>
+VWAP is used by professionals to judge the average price paid for a stock during the day. If price is above VWAP, buyers are in control; below, sellers are.<br>
+<b>Tip:</b> VWAP is most useful for intraday trading, but can help you see if you're buying/selling at a fair price.
 </p>
 """
+for label, prices, volumes in scenarios:
+    df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
+    df["Open"] = df["Close"] + np.random.randn(100)
+    df["High"] = df[["Open", "Close"]].max(axis=1) + np.abs(np.random.randn(100))
+    df["Low"] = df[["Open", "Close"]].min(axis=1) - np.abs(np.random.randn(100))
+    df["VWAP"] = VolumeWeightedAveragePrice(
+        high=df["High"], low=df["Low"], close=df["Close"], volume=df["Volume"]
+    ).volume_weighted_average_price()
+    fig, ax = plt.subplots(figsize=(8, 3))
+    ax.plot(df["Date"], df["Close"], label="Close", color="black")
+    ax.plot(df["Date"], df["VWAP"], label="VWAP", color="purple")
+    ax.set_title(f"{label} Example: VWAP")
+    ax.legend()
+    fname = plot_and_save(fig, f"vwap_{label.lower()}")
+    vwap_html += f"""
+    <h3>{label} Market</h3>
+    <img src="{fname}" alt="{label} VWAP">
+    <p>
+    <b>What to notice:</b> In a {label.lower()}, does price stay above or below VWAP? Does it cross VWAP often?
+    </p>
+    """
 
 # --- RSI ---
 rsi_html = "<h2>RSI: Relative Strength Index</h2>"
+rsi_html += """
+<p>
+RSI measures momentum. Above 70 is overbought, below 30 is oversold.<br>
+<b>Tip:</b> In strong trends, RSI can stay overbought/oversold for a long time. Look for divergences (price makes new high, RSI does not) as warning signs.
+</p>
+"""
 for label, prices, volumes in scenarios:
     df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
     df["RSI"] = RSIIndicator(close=df["Close"]).rsi()
@@ -137,13 +165,18 @@ for label, prices, volumes in scenarios:
     <h3>{label} Market</h3>
     <img src="{fname}" alt="{label} RSI">
     <p>
-    <b>RSI</b> oscillates between 0 and 100.<br>
-    <i>Above 70 is considered overbought, below 30 oversold. See how RSI reacts to strong trends and reversals.</i>
+    <b>What to notice:</b> In a {label.lower()}, does RSI stay in the overbought/oversold zone? Are there divergences?
     </p>
     """
 
 # --- MACD ---
 macd_html = "<h2>MACD: Trend and Momentum</h2>"
+macd_html += """
+<p>
+MACD shows the relationship between two moving averages. Crossovers can signal trend changes.<br>
+<b>Tip:</b> Look for MACD crossing above/below its signal line, and for divergence between MACD and price.
+</p>
+"""
 for label, prices, volumes in scenarios:
     df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
     macd = MACD(close=df["Close"])
@@ -159,13 +192,18 @@ for label, prices, volumes in scenarios:
     <h3>{label} Market</h3>
     <img src="{fname}" alt="{label} MACD">
     <p>
-    <b>MACD</b> shows the difference between two EMAs.<br>
-    <i>Crossovers between MACD and its signal line can indicate trend changes.</i>
+    <b>What to notice:</b> In a {label.lower()}, do you see clear crossovers? Is MACD confirming the trend or showing divergence?
     </p>
     """
 
 # --- ATR ---
 atr_html = "<h2>ATR: Average True Range (Volatility)</h2>"
+atr_html += """
+<p>
+ATR measures volatility. High ATR means big price swings; low ATR means calm markets.<br>
+<b>Tip:</b> Use ATR to set stop-losses: in volatile markets, use wider stops.
+</p>
+"""
 for label, prices, volumes in scenarios:
     df = pd.DataFrame({"Date": dates, "Close": prices, "Volume": volumes})
     df["Open"] = df["Close"] + np.random.randn(100)
@@ -186,8 +224,7 @@ for label, prices, volumes in scenarios:
     <h3>{label} Market</h3>
     <img src="{fname}" alt="{label} ATR">
     <p>
-    <b>ATR</b> measures volatility.<br>
-    <i>Notice how ATR rises during volatile periods and falls during calm periods.</i>
+    <b>What to notice:</b> In a {label.lower()}, does ATR rise or fall? Does it warn you of increased risk?
     </p>
     """
 
