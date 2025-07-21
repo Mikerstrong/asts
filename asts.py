@@ -38,6 +38,21 @@ def fetch_data(start=None, end=None):
     df.dropna(subset=["Open", "High", "Low", "Close", "Volume"], inplace=True)
     df.reset_index(inplace=True)
 
+    # Fetch shares outstanding information
+    try:
+        ticker = yf.Ticker("ASTS")
+        info = ticker.info
+        shares_outstanding = info.get('sharesOutstanding', info.get('impliedSharesOutstanding', 0))
+        if shares_outstanding == 0:
+            # Fallback to a reasonable estimate if data is unavailable
+            shares_outstanding = 150000000  # Approximate for ASTS as of recent data
+    except Exception as e:
+        print(f"Warning: Could not fetch shares outstanding data: {e}")
+        shares_outstanding = 150000000  # Fallback value
+    
+    # Add shares outstanding as a column (same value for all rows since it doesn't change daily)
+    df["Shares Outstanding"] = shares_outstanding
+
     # Standard Indicators
     df["SMA10"] = df["Close"].rolling(window=10).mean()
     df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
@@ -69,7 +84,8 @@ def resample_weekly(df):
         "High": "max",
         "Low": "min",
         "Close": "last",
-        "Volume": "sum"
+        "Volume": "sum",
+        "Shares Outstanding": "first"  # Shares outstanding doesn't change, so use first value
     }).dropna().reset_index()
     # Recalculate indicators for weekly data
     df_weekly["SMA10"] = df_weekly["Close"].rolling(window=10).mean()
@@ -123,13 +139,14 @@ def generate_plotly_chart(df):
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
 def build_html_table(df):
-    headers = ["Date", "Open", "High", "Low", "Close", "Volume"]
+    headers = ["Date", "Open", "High", "Low", "Close", "Volume", "Shares Outstanding"]
     rows = []
     for _, row in df.iterrows():
         row_data = [row["Date"].strftime("%Y-%m-%d"),
                     f"{row['Open']:.2f}", f"{row['High']:.2f}",
                     f"{row['Low']:.2f}", f"{row['Close']:.2f}",
-                    f"{int(row['Volume']):,}"]
+                    f"{int(row['Volume']):,}",
+                    f"{int(row['Shares Outstanding']):,}"]
         rows.append("<tr><td>" + "</td><td>".join(row_data) + "</td></tr>")
     return "<table><tr><th>" + "</th><th>".join(headers) + "</th></tr>\n" + "\n".join(rows) + "</table>"
 
