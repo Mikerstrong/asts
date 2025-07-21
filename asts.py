@@ -10,6 +10,10 @@ from ta.momentum import RSIIndicator
 from ta.volatility import AverageTrueRange
 from ta.volume import VolumeWeightedAveragePrice
 from dateutil.relativedelta import relativedelta
+import matplotlib.pyplot as plt
+import seaborn as sns
+import base64
+from io import BytesIO
 
 def deduplicate_columns(cols):
     seen = {}
@@ -138,6 +142,60 @@ def generate_plotly_chart(df):
                       legend=dict(x=0.01, y=0.99))
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
+def generate_seaborn_chart(df):
+    # Set the style for dark theme
+    plt.style.use('dark_background')
+    sns.set_palette("husl")
+    
+    # Create figure and subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), gridspec_kw={'height_ratios': [3, 1]})
+    fig.patch.set_facecolor('#111111')
+    
+    # Main price chart
+    ax1.set_facecolor('#111111')
+    
+    # Plot price lines
+    ax1.plot(df["Date"], df["Close"], color='white', linewidth=2, label='Close Price')
+    ax1.plot(df["Date"], df["SMA10"], color='orange', linewidth=1, label='SMA10')
+    ax1.plot(df["Date"], df["EMA20"], color='deepskyblue', linewidth=1, label='EMA20')
+    ax1.plot(df["Date"], df["UpperBB"], color='gray', linestyle='--', alpha=0.7, label='Upper BB')
+    ax1.plot(df["Date"], df["LowerBB"], color='gray', linestyle='--', alpha=0.7, label='Lower BB')
+    ax1.plot(df["Date"], df["VWAP"], color='white', linewidth=1, alpha=0.8, label='VWAP')
+    
+    # Fill area between Bollinger Bands
+    ax1.fill_between(df["Date"], df["UpperBB"], df["LowerBB"], alpha=0.1, color='gray')
+    
+    # Add scaled indicators
+    ax1.plot(df["Date"], df["RSI_scaled"], color='violet', linewidth=1, linestyle=':', label='RSI (scaled)')
+    ax1.plot(df["Date"], df["MACD_scaled"], color='lightgreen', linewidth=1, linestyle='--', label='MACD (scaled)')
+    ax1.plot(df["Date"], df["MACD_Signal_scaled"], color='orange', linewidth=1, linestyle='--', label='MACD Signal (scaled)')
+    
+    ax1.set_title('ASTS Stock Analysis', color='white', fontsize=16, pad=20)
+    ax1.set_ylabel('Price ($)', color='white')
+    ax1.legend(loc='upper left', framealpha=0.1)
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(colors='white')
+    
+    # Volume chart
+    ax2.set_facecolor('#111111')
+    bars = ax2.bar(df["Date"], df["Volume"], color='royalblue', alpha=0.7)
+    ax2.set_ylabel('Volume', color='white')
+    ax2.set_xlabel('Date', color='white')
+    ax2.tick_params(colors='white')
+    ax2.grid(True, alpha=0.3)
+    
+    # Format x-axis dates
+    fig.autofmt_xdate()
+    
+    # Convert to base64 string
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', facecolor='#111111', edgecolor='none', bbox_inches='tight', dpi=100)
+    buffer.seek(0)
+    chart_base64 = base64.b64encode(buffer.getvalue()).decode()
+    plt.close()
+    
+    return f'<img src="data:image/png;base64,{chart_base64}" style="width:100%; height:auto;">'
+
 def build_html_table(df):
     headers = ["Date", "Open", "High", "Low", "Close", "Volume", "Shares Outstanding"]
     rows = []
@@ -150,7 +208,7 @@ def build_html_table(df):
         rows.append("<tr><td>" + "</td><td>".join(row_data) + "</td></tr>")
     return "<table><tr><th>" + "</th><th>".join(headers) + "</th></tr>\n" + "\n".join(rows) + "</table>"
 
-def save_html(chart_html, weekly_chart_html, table_html, output_path):
+def save_html(chart_html, weekly_chart_html, seaborn_chart_html, weekly_seaborn_chart_html, table_html, output_path):
     html = f"""
     <html>
     <head>
@@ -161,6 +219,22 @@ def save_html(chart_html, weekly_chart_html, table_html, output_path):
                 background-color: #111;
                 color: #eee;
                 padding: 40px;
+            }}
+            .chart-controls {{
+                text-align: center;
+                margin: 20px 0;
+            }}
+            .chart-dropdown {{
+                background-color: #222;
+                color: #eee;
+                border: 1px solid #444;
+                padding: 8px 16px;
+                font-size: 16px;
+                border-radius: 4px;
+                font-family: monospace;
+            }}
+            .chart-container {{
+                margin: 20px 0;
             }}
             table {{
                 width: 100%;
@@ -178,25 +252,88 @@ def save_html(chart_html, weekly_chart_html, table_html, output_path):
             tr:nth-child(even) {{
                 background-color: #1a1a1a;
             }}
+            .hidden {{
+                display: none;
+            }}
         </style>
+        <script>
+            function toggleChartLibrary() {{
+                var dropdown = document.getElementById('chartLibrary');
+                var plotlyDaily = document.getElementById('plotly-daily-chart');
+                var plotlyWeekly = document.getElementById('plotly-weekly-chart');
+                var seabornDaily = document.getElementById('seaborn-daily-chart');
+                var seabornWeekly = document.getElementById('seaborn-weekly-chart');
+                
+                if (dropdown.value === 'plotly') {{
+                    plotlyDaily.classList.remove('hidden');
+                    plotlyWeekly.classList.remove('hidden');
+                    seabornDaily.classList.add('hidden');
+                    seabornWeekly.classList.add('hidden');
+                }} else {{
+                    plotlyDaily.classList.add('hidden');
+                    plotlyWeekly.classList.add('hidden');
+                    seabornDaily.classList.remove('hidden');
+                    seabornWeekly.classList.remove('hidden');
+                }}
+            }}
+            
+            // Initialize on page load
+            window.onload = function() {{
+                toggleChartLibrary();
+            }}
+        </script>
     </head>
     <body>
-        {chart_html}
-        <h2 style='text-align:center;'>Weekly Chart</h2>
-        {weekly_chart_html}
+        <h1 style='text-align:center;'>ASTS Stock Dashboard</h1>
+        
+        <div class="chart-controls">
+            <label for="chartLibrary">Chart Library: </label>
+            <select id="chartLibrary" class="chart-dropdown" onchange="toggleChartLibrary()">
+                <option value="plotly" selected>Plotly (Interactive)</option>
+                <option value="seaborn">Seaborn (Static)</option>
+            </select>
+        </div>
+        
+        <div id="plotly-daily-chart" class="chart-container">
+            <h2 style='text-align:center;'>Daily Chart (Plotly)</h2>
+            {chart_html}
+        </div>
+        
+        <div id="seaborn-daily-chart" class="chart-container hidden">
+            <h2 style='text-align:center;'>Daily Chart (Seaborn)</h2>
+            {seaborn_chart_html}
+        </div>
+        
+        <div id="plotly-weekly-chart" class="chart-container">
+            <h2 style='text-align:center;'>Weekly Chart (Plotly)</h2>
+            {weekly_chart_html}
+        </div>
+        
+        <div id="seaborn-weekly-chart" class="chart-container hidden">
+            <h2 style='text-align:center;'>Weekly Chart (Seaborn)</h2>
+            {weekly_seaborn_chart_html}
+        </div>
+        
         {table_html}
     </body>
     </html>
     """
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"✅ Dashboard saved to: {output_path}")
+    print(f"✅ Dashboard saved to: {{output_path}}")
 
 def main():
     df = fetch_data()
+    
+    # Generate Plotly charts
     chart_html = generate_plotly_chart(df)
     df_weekly = resample_weekly(df)
     weekly_chart_html = generate_plotly_chart(df_weekly)
+    
+    # Generate Seaborn charts
+    seaborn_chart_html = generate_seaborn_chart(df)
+    weekly_seaborn_chart_html = generate_seaborn_chart(df_weekly)
+    
     table_html = build_html_table(df)
     output_path = "asts.html"
 
@@ -206,7 +343,7 @@ def main():
     pct_change = ((last_close - first_close) / first_close) * 100
     pct_change_html = f"<h3 style='text-align:center;'>% Change Over Period: {pct_change:.2f}%</h3>"
 
-    save_html(chart_html, weekly_chart_html, pct_change_html + table_html, output_path)
+    save_html(chart_html, weekly_chart_html, seaborn_chart_html, weekly_seaborn_chart_html, pct_change_html + table_html, output_path)
 
 if __name__ == "__main__":
     main()
