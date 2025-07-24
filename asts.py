@@ -208,6 +208,110 @@ def generate_plotly_chart(df):
                       legend=dict(x=0.01, y=0.99))
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
+def build_indicators_summary(df, symbol):
+    """Build a summary table of all technical indicators for the latest date"""
+    if len(df) == 0:
+        return "<p style='text-align:center; color:red;'>No data available for indicators summary</p>"
+    
+    # Get the latest row with non-null indicator values
+    latest_row = df.dropna().iloc[-1] if len(df.dropna()) > 0 else df.iloc[-1]
+    
+    # Helper function to format indicator values and add interpretations
+    def format_indicator(value, indicator_type):
+        if pd.isna(value):
+            return "N/A", ""
+        
+        formatted_value = f"{value:.2f}"
+        interpretation = ""
+        
+        # Add basic interpretations for key indicators
+        if indicator_type == "RSI":
+            if value > 70:
+                interpretation = " (Overbought)"
+            elif value < 30:
+                interpretation = " (Oversold)"
+            else:
+                interpretation = " (Neutral)"
+        elif indicator_type == "MACD_vs_Signal":
+            macd_val = latest_row.get("MACD", 0)
+            signal_val = latest_row.get("MACD_Signal", 0)
+            if not pd.isna(macd_val) and not pd.isna(signal_val):
+                if macd_val > signal_val:
+                    interpretation = " (Bullish)"
+                else:
+                    interpretation = " (Bearish)"
+        
+        return formatted_value, interpretation
+    
+    # Build summary data
+    summary_data = [
+        ("Current Price", f"{latest_row['Close']:.2f}", ""),
+        ("SMA (10-day)", *format_indicator(latest_row.get('SMA10'), "SMA")),
+        ("EMA (20-day)", *format_indicator(latest_row.get('EMA20'), "EMA")),
+        ("Upper Bollinger Band", *format_indicator(latest_row.get('UpperBB'), "BB")),
+        ("Lower Bollinger Band", *format_indicator(latest_row.get('LowerBB'), "BB")),
+        ("VWAP", *format_indicator(latest_row.get('VWAP'), "VWAP")),
+        ("RSI", *format_indicator(latest_row.get('RSI'), "RSI")),
+        ("MACD", *format_indicator(latest_row.get('MACD'), "MACD")),
+        ("MACD Signal", *format_indicator(latest_row.get('MACD_Signal'), "MACD_Signal")),
+        ("ATR", *format_indicator(latest_row.get('ATR'), "ATR")),
+    ]
+    
+    # Determine overall trend
+    close_price = latest_row['Close']
+    sma10 = latest_row.get('SMA10')
+    ema20 = latest_row.get('EMA20')
+    
+    overall_trend = "Neutral"
+    if not pd.isna(sma10) and not pd.isna(ema20):
+        if close_price > sma10 and close_price > ema20:
+            overall_trend = "📈 Bullish"
+        elif close_price < sma10 and close_price < ema20:
+            overall_trend = "📉 Bearish"
+    
+    # Build HTML table
+    summary_html = f"""
+    <div style='margin: 20px 0; padding: 20px; background-color: #222; border-radius: 8px;'>
+        <h3 style='text-align:center; color: #ffb347; margin-bottom: 15px;'>📊 {symbol} Indicators Summary</h3>
+        <div style='display: flex; justify-content: center; margin-bottom: 15px;'>
+            <div style='padding: 10px 20px; background-color: #333; border-radius: 5px; color: #ffb347; font-weight: bold;'>
+                Overall Trend: {overall_trend}
+            </div>
+        </div>
+        <table style='width: 100%; max-width: 600px; margin: 0 auto; border-collapse: collapse;'>
+            <tr style='background-color: #333;'>
+                <th style='padding: 12px; text-align: left; border: 1px solid #444; color: #ffb347;'>Indicator</th>
+                <th style='padding: 12px; text-align: right; border: 1px solid #444; color: #ffb347;'>Value</th>
+                <th style='padding: 12px; text-align: center; border: 1px solid #444; color: #ffb347;'>Signal</th>
+            </tr>
+    """
+    
+    for indicator, value, interpretation in summary_data:
+        color = "#eee"
+        if "Bullish" in interpretation:
+            color = "#90EE90"  # Light green
+        elif "Bearish" in interpretation:
+            color = "#FFB6C1"  # Light pink
+        elif "Overbought" in interpretation:
+            color = "#FFA500"  # Orange
+        elif "Oversold" in interpretation:
+            color = "#87CEEB"  # Sky blue
+        
+        summary_html += f"""
+            <tr style='background-color: #1a1a1a;'>
+                <td style='padding: 10px; border: 1px solid #444; color: #eee;'>{indicator}</td>
+                <td style='padding: 10px; border: 1px solid #444; text-align: right; color: #eee; font-family: monospace;'>{value}</td>
+                <td style='padding: 10px; border: 1px solid #444; text-align: center; color: {color}; font-size: 0.9em;'>{interpretation}</td>
+            </tr>
+        """
+    
+    summary_html += """
+        </table>
+    </div>
+    """
+    
+    return summary_html
+
 def build_html_table(df):
     headers = ["Date", "Open", "High", "Low", "Close", "Volume", "Shares Outstanding"]
     rows = []
@@ -270,6 +374,7 @@ def save_html(stocks_data, output_path):
         html += f"""
         <div class="stock-section">
             <h2 class="stock-title">{symbol} Dashboard</h2>
+            {data['indicators_summary_html']}
             {data['chart_html']}
             <h3 style='text-align:center;'>Weekly Chart</h3>
             {data['weekly_chart_html']}
@@ -298,6 +403,7 @@ def main():
             df_weekly = resample_weekly(df)
             weekly_chart_html = generate_plotly_chart(df_weekly)
             table_html = build_html_table(df)
+            indicators_summary_html = build_indicators_summary(df, symbol)
             
             # Calculate percent change over period
             if len(df) > 0:
@@ -312,6 +418,7 @@ def main():
                 'chart_html': chart_html,
                 'weekly_chart_html': weekly_chart_html,
                 'table_html': table_html,
+                'indicators_summary_html': indicators_summary_html,
                 'pct_change_html': pct_change_html
             }
             print(f"✅ {symbol} data processed successfully")
@@ -323,6 +430,7 @@ def main():
                 'chart_html': f"<p style='text-align:center; color:red;'>Failed to load data for {symbol}: {e}</p>",
                 'weekly_chart_html': "",
                 'table_html': f"<p style='text-align:center; color:red;'>No data available for {symbol}</p>",
+                'indicators_summary_html': f"<p style='text-align:center; color:red;'>No indicators summary available for {symbol}</p>",
                 'pct_change_html': "<h3 style='text-align:center;'>% Change Over Period: N/A</h3>"
             }
     
