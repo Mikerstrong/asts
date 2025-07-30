@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  asts-dashboard:
+    build: .
+    container_name: asts-dashboard
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=America/Chicago
+    restart: unless-stopped
+    networks:
+      - asts-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.asts.rule=Host(`asts.localhost`)"
+      - "traefik.http.services.asts.loadbalancer.server.port=8000"
+
+networks:
+  asts-network:
+    driver: bridge
