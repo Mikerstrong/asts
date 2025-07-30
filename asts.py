@@ -11,6 +11,9 @@ from ta.volatility import AverageTrueRange
 from ta.volume import VolumeWeightedAveragePrice
 from dateutil.relativedelta import relativedelta
 import random
+import matplotlib.pyplot as plt
+import seaborn as sns
+import json
 
 def deduplicate_columns(cols):
     seen = {}
@@ -206,7 +209,61 @@ def generate_plotly_chart(df):
                       margin=dict(t=30, b=30, l=20, r=20),
                       xaxis=dict(rangeslider=dict(visible=True), type="date"),
                       legend=dict(x=0.01, y=0.99))
+    
+    # Save as JSON for Flask app
+    fig_json = fig.to_json()
+    with open('asts_plotly_chart.json', 'w') as f:
+        f.write(fig_json)
+    
     return fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+def generate_seaborn_chart(df):
+    """Generate a static Seaborn chart and save as PNG"""
+    plt.style.use('dark_background')
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+    fig.suptitle('ASTS Stock Analysis - Seaborn Charts', fontsize=16, color='white')
+    
+    # 1. Candlestick-style price chart
+    ax1.plot(df.index, df['Close'], color='cyan', linewidth=2, label='Close Price')
+    ax1.plot(df.index, df['SMA10'], color='orange', linewidth=1, label='SMA10')
+    ax1.plot(df.index, df['EMA20'], color='deepskyblue', linewidth=1, label='EMA20')
+    ax1.fill_between(df.index, df['LowerBB'], df['UpperBB'], alpha=0.2, color='gray', label='Bollinger Bands')
+    ax1.set_title('Price Chart with Indicators', color='white')
+    ax1.set_ylabel('Price ($)', color='white')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # 2. Volume chart
+    ax2.bar(df.index, df['Volume'], color='royalblue', alpha=0.7)
+    ax2.set_title('Volume', color='white')
+    ax2.set_ylabel('Volume', color='white')
+    ax2.grid(True, alpha=0.3)
+    
+    # 3. RSI and MACD
+    ax3.plot(df.index, df['RSI'], color='violet', linewidth=2, label='RSI')
+    ax3.axhline(y=70, color='red', linestyle='--', alpha=0.7, label='Overbought')
+    ax3.axhline(y=30, color='green', linestyle='--', alpha=0.7, label='Oversold')
+    ax3.set_title('RSI Indicator', color='white')
+    ax3.set_ylabel('RSI', color='white')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    
+    # 4. MACD
+    ax4.plot(df.index, df['MACD'], color='lightgreen', linewidth=2, label='MACD')
+    ax4.plot(df.index, df['MACD_Signal'], color='orange', linewidth=2, label='Signal')
+    ax4.bar(df.index, df['MACD'] - df['MACD_Signal'], color='purple', alpha=0.5, label='Histogram')
+    ax4.set_title('MACD Indicator', color='white')
+    ax4.set_ylabel('MACD', color='white')
+    ax4.legend()
+    ax4.grid(True, alpha=0.3)
+    
+    # Adjust layout and save
+    plt.tight_layout()
+    plt.savefig('asts_seaborn_chart.png', dpi=300, bbox_inches='tight', 
+                facecolor='black', edgecolor='none')
+    plt.close()
+    
+    return 'asts_seaborn_chart.png'
 
 def build_html_table(df):
     headers = ["Date", "Open", "High", "Low", "Close", "Volume", "Shares Outstanding"]
