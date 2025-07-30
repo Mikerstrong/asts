@@ -12,12 +12,19 @@ services:
       - PYTHONUNBUFFERED=1
       - TZ=America/Chicago
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - asts-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.asts.rule=Host(`asts.localhost`)"
       - "traefik.http.services.asts.loadbalancer.server.port=8000"
+      - "com.centurylinklabs.watchtower.enable=true"
 
 networks:
   asts-network:
