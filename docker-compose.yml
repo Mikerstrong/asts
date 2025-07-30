@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   asts-dashboard:
-    build: .
+    build:
+      context: https://github.com/Mikerstrong/asts.git
+      dockerfile: Dockerfile
     container_name: asts-dashboard
     ports:
       - "8000:8000"
